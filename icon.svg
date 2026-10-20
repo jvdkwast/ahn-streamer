@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect x="1" y="1" width="30" height="30" rx="6" fill="#ea5a0c"/>
+  <text x="16" y="15" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="10.5" fill="#ffffff">AHN</text>
+  <g fill="#ffffff">
+    <circle cx="6" cy="25" r="1.2"/><circle cx="9" cy="23" r="1.2"/><circle cx="12" cy="24" r="1.2"/>
+    <circle cx="15" cy="21.5" r="1.2"/><circle cx="18" cy="22.5" r="1.2"/><circle cx="21" cy="20.5" r="1.2"/>
+    <circle cx="24" cy="23" r="1.2"/><circle cx="27" cy="25" r="1.2"/>
+  </g>
+</svg>
