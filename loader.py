@@ -33,22 +33,28 @@ from qgis.PyQt.QtGui import QColor
 
 from . import ahn_tiles, vpc
 from .i18n import tr
+from .log import log
 
 # Field types: QMetaType on QGIS >= 3.38 (required on Qt6), QVariant before.
 if Qgis.QGIS_VERSION_INT >= 33800:
     from qgis.PyQt.QtCore import QMetaType
+
     T_STRING, T_DOUBLE = QMetaType.Type.QString, QMetaType.Type.Double
 else:
     from qgis.PyQt.QtCore import QVariant
+
     T_STRING, T_DOUBLE = QVariant.String, QVariant.Double
 
 GROUP_NAME = "AHN Streamer"
-SHEETS_PROP = "ahn_copc/sheets"  # marks the sheet overlay layer (its name is translated)
+SHEETS_PROP = (  # marks the sheet overlay layer (its name is translated)
+    "ahn_copc/sheets"
+)
 PROP_KEY = "ahn_copc/url"  # custom property to recognise our layers
 VPC_LABEL = "ahn_copc/vpc_label"
 VPC_TILES = "ahn_copc/vpc_tiles"
 
-# Renderer keys (stored in the settings) and their English labels (translated in the UI)
+# Renderer keys (stored in the settings) and their English labels
+# (translated in the UI)
 RENDER_DEFAULT = "default"
 RENDER_CLASSES = "classes"
 RENDER_HEIGHT = "height"
@@ -62,8 +68,10 @@ RENDERERS = {
     RENDER_DEFAULT: "QGIS default (RGB if present)",
 }
 
-# Renderers with a value range set in the panel: mode -> (attribute, default min, default max, unit)
-# The range is fixed instead of taken from layer statistics, because QGIS has no
+# Renderers with a value range set in the panel:
+#   mode -> (attribute, default min, default max, unit)
+# The range is fixed instead of taken from layer statistics, because QGIS has
+# no
 # statistics for a VPC with remote files; a fixed range also makes adjacent
 # tiles use identical colours.
 RANGED = {
@@ -71,7 +79,13 @@ RANGED = {
     RENDER_INTENSITY: ("Intensity", 0.0, 2000.0, ""),
 }
 
-RETURN_COLORS = {1: "#d9d9d9", 2: "#a1d99b", 3: "#41ab5d", 4: "#006d2c", 5: "#00441b"}
+RETURN_COLORS = {
+    1: "#d9d9d9",
+    2: "#a1d99b",
+    3: "#41ab5d",
+    4: "#006d2c",
+    5: "#00441b",
+}
 
 
 def get_group(create=True):
@@ -94,7 +108,11 @@ def loaded_urls():
 def _classified_renderer():
     cats = []
     for code, (label, color) in sorted(ahn_tiles.CLASSES.items()):
-        cats.append(QgsPointCloudCategory(code, QColor(color), "%d %s" % (code, tr(label))))
+        cats.append(
+            QgsPointCloudCategory(
+                code, QColor(color), "%d %s" % (code, tr(label))
+            )
+        )
     r = QgsPointCloudClassifiedRenderer("Classification", cats)
     return r
 
@@ -110,7 +128,11 @@ def _returns_renderer():
             label = tr("5 or more returns")
         cats.append(QgsPointCloudCategory(n, QColor(color), label))
     for n in range(6, 16):  # higher counts get the darkest colour as well
-        cats.append(QgsPointCloudCategory(n, QColor(RETURN_COLORS[5]), tr("%d returns", n)))
+        cats.append(
+            QgsPointCloudCategory(
+                n, QColor(RETURN_COLORS[5]), tr("%d returns", n)
+            )
+        )
     return QgsPointCloudClassifiedRenderer("NumberOfReturns", cats)
 
 
@@ -150,12 +172,12 @@ def ensure_3d_renderer(layer):
             layer.setRenderer3D(r3d)
         if hasattr(layer, "setSync3DRendererTo2DRenderer"):
             layer.setSync3DRendererTo2DRenderer(True)
-    except Exception:  # 3D problems must never block loading the 2D layer
-        pass
+    except Exception as e:  # 3D problems must never block loading the 2D layer
+        log("Could not set up the 3D renderer for %s: %s" % (layer.name(), e))
 
 
 def apply_renderer(layer, mode, vmin=None, vmax=None):
-    """Apply one of RENDERERS. vmin/vmax: value range for the modes in RANGED."""
+    """Apply one of RENDERERS; vmin/vmax: value range for modes in RANGED."""
     ensure_3d_renderer(layer)
     if mode in RANGED:
         attribute, dmin, dmax, _ = RANGED[mode]
@@ -167,7 +189,9 @@ def apply_renderer(layer, mode, vmin=None, vmax=None):
         # Spectral inverted: low = blue, high = red
         layer.setRenderer(_ramp_renderer("Z", vmin, vmax, "Spectral", True))
     elif mode == RENDER_INTENSITY:
-        layer.setRenderer(_ramp_renderer("Intensity", vmin, vmax, "Greys", True))
+        layer.setRenderer(
+            _ramp_renderer("Intensity", vmin, vmax, "Greys", True)
+        )
     elif mode == RENDER_RETURNS:
         layer.setRenderer(_returns_renderer())
     else:
@@ -176,14 +200,22 @@ def apply_renderer(layer, mode, vmin=None, vmax=None):
             r = QgsPointCloudRendererRegistry.defaultRenderer(layer)
             if r is not None:
                 layer.setRenderer(r)
-        except TypeError:
-            pass
-    # Convert the 3D renderer to the 2D symbology (explicitly, also for older QGIS)
-    if layer.renderer3D() is not None and hasattr(layer, "convertRenderer3DFromRenderer2D"):
+        except TypeError as e:  # older QGIS signature
+            log(
+                "Could not create the default renderer for %s: %s"
+                % (layer.name(), e)
+            )
+    # Convert the 3D renderer to the 2D symbology (explicit for older QGIS)
+    if layer.renderer3D() is not None and hasattr(
+        layer, "convertRenderer3DFromRenderer2D"
+    ):
         try:
             layer.convertRenderer3DFromRenderer2D()
-        except Exception:
-            pass
+        except Exception as e:  # keep the 2D layer usable even if 3D fails
+            log(
+                "Could not convert the 3D renderer for %s: %s"
+                % (layer.name(), e)
+            )
     layer.triggerRepaint()
 
 
@@ -191,9 +223,14 @@ def _set_metadata(layer, version):
     info = ahn_tiles.VERSIONS.get(version, {})
     md = layer.metadata()
     md.setTitle(layer.name())
-    md.setAbstract(tr(
-        "Point cloud of the Actueel Hoogtebestand Nederland (%s, %s), streamed as "
-        "Cloud Optimized Point Cloud (COPC).", version, info.get("period", "")))
+    md.setAbstract(
+        tr(
+            "Point cloud of the Actueel Hoogtebestand Nederland (%s, %s),"
+            " streamed as Cloud Optimized Point Cloud (COPC).",
+            version,
+            info.get("period", ""),
+        )
+    )
     md.setRights([tr("Source: AHN (www.ahn.nl)")])
     md.setLicenses([info.get("license", "")])
     layer.setMetadata(md)
@@ -201,7 +238,10 @@ def _set_metadata(layer, version):
 
 def make_layer(tile, renderer_mode, subset="", zmin=None, zmax=None):
     """QgsPointCloudLayer for one tile dict from AvailabilityTask, or None."""
-    name = "%s %s" % (tile["version"], ahn_tiles.tile_name(tile["x"], tile["y"]))
+    name = "%s %s" % (
+        tile["version"],
+        ahn_tiles.tile_name(tile["x"], tile["y"]),
+    )
     layer = QgsPointCloudLayer(tile["url"], name, "copc")
     if not layer.isValid():
         return None
@@ -242,15 +282,19 @@ def vpc_tiles_of(layer):
         return []
 
 
-def make_vpc_layer(tiles, label, renderer_mode, subset="", zmin=None, zmax=None):
+def make_vpc_layer(
+    tiles, label, renderer_mode, subset="", zmin=None, zmax=None
+):
     """Write a .vpc referencing the remote COPC tiles and open it as one layer.
 
-    label: language-independent key of the version choice (e.g. "AHN6" or "newest").
+    label: language-independent key of the version choice ("AHN6", "newest").
 
     tiles: dicts with x, y, version, url and optionally hdr {count, bbox}.
     """
     rd = QgsCoordinateReferenceSystem("EPSG:28992")
-    xform = QgsCoordinateTransform(rd, QgsCoordinateReferenceSystem("EPSG:4326"), QgsProject.instance())
+    xform = QgsCoordinateTransform(
+        rd, QgsCoordinateReferenceSystem("EPSG:4326"), QgsProject.instance()
+    )
 
     def to_wgs84(x, y):
         p = xform.transform(QgsPointXY(x, y))
@@ -259,16 +303,40 @@ def make_vpc_layer(tiles, label, renderer_mode, subset="", zmin=None, zmax=None)
     entries = []
     for t in tiles:
         hdr = t.get("hdr") or {}
-        bbox = hdr.get("bbox") or [t["x"], t["y"], -10.0, t["x"] + ahn_tiles.CELL, t["y"] + ahn_tiles.CELL, 200.0]
+        bbox = hdr.get("bbox") or [
+            t["x"],
+            t["y"],
+            -10.0,
+            t["x"] + ahn_tiles.CELL,
+            t["y"] + ahn_tiles.CELL,
+            200.0,
+        ]
         # point format from the header; fallback for tiles from an older plugin
         # version: AHN6 is coloured (RGB), older versions are not
         pdrf = hdr.get("pdrf", 7 if t["version"] == "AHN6" else 6)
-        entries.append({"id": "%s_%s" % (t["version"], ahn_tiles.tile_name(t["x"], t["y"])),
-                        "url": t["url"], "bbox": bbox, "count": hdr.get("count", 0),
-                        "pdrf": pdrf})
+        entries.append(
+            {
+                "id": (
+                    "%s_%s"
+                    % (t["version"], ahn_tiles.tile_name(t["x"], t["y"]))
+                ),
+                "url": t["url"],
+                "bbox": bbox,
+                "count": hdr.get("count", 0),
+                "pdrf": pdrf,
+            }
+        )
 
-    path = os.path.join(vpc_dir(), "%s_%d.vpc" % (label.replace(" ", "_"), int(time.time() * 1000)))
-    vpc.write_vpc(path, vpc.build_vpc(entries, to_wgs84, _wkt2(QgsCoordinateReferenceSystem("EPSG:7415"))))
+    path = os.path.join(
+        vpc_dir(),
+        "%s_%d.vpc" % (label.replace(" ", "_"), int(time.time() * 1000)),
+    )
+    vpc.write_vpc(
+        path,
+        vpc.build_vpc(
+            entries, to_wgs84, _wkt2(QgsCoordinateReferenceSystem("EPSG:7415"))
+        ),
+    )
 
     shown = tr("AHN newest") if label == ahn_tiles.NEWEST else label
     name = tr("%s VPC (%d sheets)", shown, len(tiles))
@@ -280,7 +348,10 @@ def make_vpc_layer(tiles, label, renderer_mode, subset="", zmin=None, zmax=None)
     apply_renderer(layer, renderer_mode, zmin, zmax)
     versions = sorted({t["version"] for t in tiles})
     _set_metadata(layer, versions[-1] if versions else "")
-    keep = [{k: t[k] for k in ("x", "y", "version", "url", "hdr") if k in t} for t in tiles]
+    keep = [
+        {k: t[k] for k in ("x", "y", "version", "url", "hdr") if k in t}
+        for t in tiles
+    ]
     layer.setCustomProperty(PROP_KEY, path)
     layer.setCustomProperty(VPC_LABEL, label)
     layer.setCustomProperty(VPC_TILES, json.dumps(keep))
@@ -288,7 +359,7 @@ def make_vpc_layer(tiles, label, renderer_mode, subset="", zmin=None, zmax=None)
 
 
 def replace_vpc_layer(old, new):
-    """Put `new` where `old` was in the layer tree and remove `old` (+ its file)."""
+    """Put `new` where `old` was in the layer tree; remove `old` + its file."""
     project = QgsProject.instance()
     group = get_group()
     old_path = old.customProperty(PROP_KEY) if old is not None else None
@@ -306,11 +377,16 @@ def replace_vpc_layer(old, new):
 
 
 def _delete_file(path):
-    if path and path.endswith(".vpc") and os.path.dirname(os.path.abspath(path)) == os.path.abspath(vpc_dir()):
+    if (
+        path
+        and path.endswith(".vpc")
+        and os.path.dirname(os.path.abspath(path))
+        == os.path.abspath(vpc_dir())
+    ):
         try:
             os.remove(path)
-        except OSError:
-            pass
+        except OSError as e:
+            log("Could not delete %s: %s" % (path, e), "Info")
 
 
 def add_layers(layers):
@@ -339,34 +415,58 @@ def remove_all():
 
 def sheets_layer(available, missing, errors):
     """Memory layer with the checked 1 km sheets and their status."""
-    vl = QgsVectorLayer("Polygon?crs=EPSG:28992", tr("AHN sheets 1 km"), "memory")
+    vl = QgsVectorLayer(
+        "Polygon?crs=EPSG:28992", tr("AHN sheets 1 km"), "memory"
+    )
     vl.setCustomProperty(SHEETS_PROP, True)
     pr = vl.dataProvider()
-    pr.addAttributes([
-        QgsField("sheet", T_STRING),
-        QgsField("version", T_STRING),
-        QgsField("status", T_STRING),
-        QgsField("size_mb", T_DOUBLE),
-        QgsField("url", T_STRING),
-    ])
+    pr.addAttributes(
+        [
+            QgsField("sheet", T_STRING),
+            QgsField("version", T_STRING),
+            QgsField("status", T_STRING),
+            QgsField("size_mb", T_DOUBLE),
+            QgsField("url", T_STRING),
+        ]
+    )
     vl.updateFields()
 
     def feat(x, y, version, status, size, url):
         f = QgsFeature(vl.fields())
-        f.setGeometry(QgsGeometry.fromRect(QgsRectangle(x, y, x + ahn_tiles.CELL, y + ahn_tiles.CELL)))
-        f.setAttributes([ahn_tiles.tile_name(x, y), version, status,
-                         round(size / 1e6, 1) if size else None, url])
+        f.setGeometry(
+            QgsGeometry.fromRect(
+                QgsRectangle(x, y, x + ahn_tiles.CELL, y + ahn_tiles.CELL)
+            )
+        )
+        f.setAttributes(
+            [
+                ahn_tiles.tile_name(x, y),
+                version,
+                status,
+                round(size / 1e6, 1) if size else None,
+                url,
+            ]
+        )
         return f
 
-    feats = [feat(t["x"], t["y"], t["version"], tr("available"), t["size"], t["url"]) for t in available]
+    feats = [
+        feat(
+            t["x"], t["y"], t["version"], tr("available"), t["size"], t["url"]
+        )
+        for t in available
+    ]
     feats += [feat(x, y, "", tr("not available"), 0, "") for (x, y) in missing]
     feats += [feat(x, y, "", tr("network error"), 0, "") for (x, y) in errors]
     pr.addFeatures(feats)
     vl.updateExtents()
 
-    symbol = QgsFillSymbol.createSimple({
-        "color": "0,0,0,0", "outline_color": "#ea5a0c", "outline_width": "0.5",
-    })
+    symbol = QgsFillSymbol.createSimple(
+        {
+            "color": "0,0,0,0",
+            "outline_color": "#ea5a0c",
+            "outline_width": "0.5",
+        }
+    )
     vl.renderer().setSymbol(symbol)
 
     pal = QgsPalLayerSettings()
@@ -382,7 +482,11 @@ def sheets_layer(available, missing, errors):
 
 def replace_sheets_layer(vl):
     project = QgsProject.instance()
-    old = [lid for lid, lyr in project.mapLayers().items() if lyr.customProperty(SHEETS_PROP)]
+    old = [
+        lid
+        for lid, lyr in project.mapLayers().items()
+        if lyr.customProperty(SHEETS_PROP)
+    ]
     project.removeMapLayers(old)
     project.addMapLayer(vl, False)
     get_group().insertLayer(0, vl)

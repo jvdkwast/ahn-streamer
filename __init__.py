@@ -9,4 +9,5 @@
 
 def classFactory(iface):
     from .plugin import AhnStreamerPlugin
+
     return AhnStreamerPlugin(iface)

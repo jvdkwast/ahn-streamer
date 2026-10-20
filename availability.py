@@ -13,10 +13,13 @@ from qgis.PyQt.QtNetwork import QNetworkRequest
 
 from . import ahn_tiles, vpc
 from .i18n import tr
+from .log import log
 
 CACHE_FILE = "ahn_copc_cache.json"
-TTL_OK = 90 * 24 * 3600      # existing files: re-check after 90 days
-TTL_MISSING = 3 * 24 * 3600  # missing files (AHN6 grows): re-check after 3 days
+TTL_OK = 90 * 24 * 3600  # existing files: re-check after 90 days
+TTL_MISSING = (
+    3 * 24 * 3600
+)  # missing files (AHN6 grows): re-check after 3 days
 USER_AGENT = "QGIS-AHN-Streamer"
 
 
@@ -30,7 +33,9 @@ def _enum(cls, scope, name):
 
 class AvailabilityCache:
     def __init__(self, path=None):
-        self.path = path or os.path.join(QgsApplication.qgisSettingsDirPath(), CACHE_FILE)
+        self.path = path or os.path.join(
+            QgsApplication.qgisSettingsDirPath(), CACHE_FILE
+        )
         self._lock = threading.Lock()
         self._data = {}
         try:
@@ -53,7 +58,11 @@ class AvailabilityCache:
     def put(self, url, ok, size=0):
         with self._lock:
             old = self._data.get(url) or {}
-            entry = {"ok": bool(ok), "size": int(size or 0), "t": int(time.time())}
+            entry = {
+                "ok": bool(ok),
+                "size": int(size or 0),
+                "t": int(time.time()),
+            }
             # keep the parsed header as long as the file did not change
             if ok and old.get("hdr") and old.get("size") == entry["size"]:
                 entry["hdr"] = old["hdr"]
@@ -84,8 +93,12 @@ class AvailabilityCache:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(data, f)
             os.replace(tmp, self.path)
-        except OSError:
-            pass
+        except OSError as e:
+            log(
+                "Could not save the availability cache %s: %s"
+                % (self.path, e),
+                "Info",
+            )
 
 
 def _status(reply):
@@ -121,7 +134,11 @@ def head(url):
             return True, int(length)
         except ValueError:
             return True, 0
-    if status in (403, 404, 410):  # object storage answers 403 for a missing key
+    if status in (
+        403,
+        404,
+        410,
+    ):  # object storage answers 403 for a missing key
         return False, 0
     return None, 0
 
@@ -129,13 +146,17 @@ def head(url):
 def read_header(url):
     """Parsed LAS header (count, bbox, pdrf) via one range request, or None."""
     blocking = QgsBlockingNetworkRequest()
-    blocking.get(_request(url, {"Range": "bytes=0-%d" % (vpc.LAS_HEADER_SIZE - 1)}))
+    blocking.get(
+        _request(url, {"Range": "bytes=0-%d" % (vpc.LAS_HEADER_SIZE - 1)})
+    )
     reply = blocking.reply()
     status = _status(reply)
     if status not in (200, 206):
         return None
     try:
-        return vpc.parse_las_header(bytes(reply.content())[:vpc.LAS_HEADER_SIZE])
+        return vpc.parse_las_header(
+            bytes(reply.content())[: vpc.LAS_HEADER_SIZE]
+        )
     except ValueError:
         return None
 
@@ -147,10 +168,20 @@ class AvailabilityTask(QgsTask):
     `missing` / `errors` lists of (x, y) for the rest.
     """
 
-    def __init__(self, cells, version, cache, base_url=ahn_tiles.BASE_URL, on_done=None, workers=8,
-                 need_header=False):
-        super().__init__(tr("AHN Streamer: checking availability"),
-                         _enum(QgsTask, "Flag", "CanCancel"))
+    def __init__(
+        self,
+        cells,
+        version,
+        cache,
+        base_url=ahn_tiles.BASE_URL,
+        on_done=None,
+        workers=8,
+        need_header=False,
+    ):
+        super().__init__(
+            tr("AHN Streamer: checking availability"),
+            _enum(QgsTask, "Flag", "CanCancel"),
+        )
         self.need_header = need_header
         self.cells = cells
         self.version = version
@@ -167,9 +198,15 @@ class AvailabilityTask(QgsTask):
         try:
             per_cell = {}
             todo = []
-            for (x, y) in self.cells:
-                per_cell[(x, y)] = {"available": [], "unknown": False, "sizes": {}}
-                for ver, url in ahn_tiles.candidate_urls(self.version, x, y, self.base_url):
+            for x, y in self.cells:
+                per_cell[(x, y)] = {
+                    "available": [],
+                    "unknown": False,
+                    "sizes": {},
+                }
+                for ver, url in ahn_tiles.candidate_urls(
+                    self.version, x, y, self.base_url
+                ):
                     known = self.cache.get(url)
                     if known is None:
                         todo.append((x, y, ver, url))
@@ -181,7 +218,10 @@ class AvailabilityTask(QgsTask):
             done = 0
             if todo:
                 with ThreadPoolExecutor(max_workers=self.workers) as ex:
-                    futures = {ex.submit(head, url): (x, y, ver, url) for (x, y, ver, url) in todo}
+                    futures = {
+                        ex.submit(head, url): (x, y, ver, url)
+                        for (x, y, ver, url) in todo
+                    }
                     for fut in as_completed(futures):
                         if self.isCanceled():
                             for f in futures:
@@ -194,7 +234,9 @@ class AvailabilityTask(QgsTask):
                         else:
                             self.cache.put(url, exists, size)
                             if exists:
-                                per_cell[(x, y)]["available"].append((ver, url))
+                                per_cell[(x, y)]["available"].append(
+                                    (ver, url)
+                                )
                                 per_cell[(x, y)]["sizes"][url] = size
                         done += 1
                         self.setProgress(100.0 * done / total)
@@ -203,8 +245,15 @@ class AvailabilityTask(QgsTask):
                 best = ahn_tiles.pick_best(self.version, info["available"])
                 if best:
                     ver, url = best
-                    self.result.append({"x": x, "y": y, "version": ver, "url": url,
-                                        "size": info["sizes"].get(url, 0)})
+                    self.result.append(
+                        {
+                            "x": x,
+                            "y": y,
+                            "version": ver,
+                            "url": url,
+                            "size": info["sizes"].get(url, 0),
+                        }
+                    )
                 elif info["unknown"]:
                     self.errors.append((x, y))
                 else:

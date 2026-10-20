@@ -34,7 +34,11 @@ RD = QgsCoordinateReferenceSystem("EPSG:28992")
 
 def _level(name):
     holder = getattr(Qgis, "MessageLevel", None)
-    return getattr(holder, name) if holder is not None and hasattr(holder, name) else getattr(Qgis, name)
+    return (
+        getattr(holder, name)
+        if holder is not None and hasattr(holder, name)
+        else getattr(Qgis, name)
+    )
 
 
 class AhnDock(QDockWidget):
@@ -53,13 +57,18 @@ class AhnDock(QDockWidget):
         lay = QVBoxLayout(w)
         form = QFormLayout()
 
-        # Combo boxes show translated labels and carry language-independent keys
+        # Combo boxes show translated labels and carry language-independent
         # as item data; the keys are what is stored in the settings.
         self.cb_version = QComboBox()
         self.cb_version.addItem(tr("Newest available"), ahn_tiles.NEWEST)
         for v in sorted(ahn_tiles.VERSIONS, reverse=True):
             self.cb_version.addItem(v, v)
-        self.cb_version.setToolTip(tr("'Newest available' loads AHN6 per 1 km sheet and falls back to AHN5."))
+        self.cb_version.setToolTip(
+            tr(
+                "'Newest available' loads AHN6 per 1 km sheet and falls back"
+                " to AHN5."
+            )
+        )
         form.addRow(tr("Version"), self.cb_version)
 
         self.cb_classes = QComboBox()
@@ -83,17 +92,27 @@ class AhnDock(QDockWidget):
         zrow.addWidget(self.sp_zmax)
         self.lbl_z = QLabel(tr("Range"))
         form.addRow(self.lbl_z, zrow)
-        self._range_mode = None  # renderer whose range the spinboxes currently show
+        self._range_mode = (
+            None  # renderer whose range the spinboxes currently show
+        )
 
         self.sp_max = QSpinBox()
         self.sp_max.setRange(1, 200)
-        self.sp_max.setToolTip(tr("Maximum number of 1x1 km sheets to load at once."))
+        self.sp_max.setToolTip(
+            tr("Maximum number of 1x1 km sheets to load at once.")
+        )
         form.addRow(tr("Max. sheets"), self.sp_max)
 
-        self.chk_vpc = QCheckBox(tr("Merge into one virtual point cloud (VPC)"))
-        self.chk_vpc.setToolTip(tr(
-            "All sheets in one layer (.vpc referring to the remote COPC files). New sheets are added "
-            "to the same VPC. Zoomed out, QGIS shows the sheet outlines; zoomed in, the points."))
+        self.chk_vpc = QCheckBox(
+            tr("Merge into one virtual point cloud (VPC)")
+        )
+        self.chk_vpc.setToolTip(
+            tr(
+                "All sheets in one layer (.vpc referring to the remote COPC"
+                " files). New sheets are added to the same VPC. Zoomed out,"
+                " QGIS shows the sheet outlines; zoomed in, the points."
+            )
+        )
         form.addRow("", self.chk_vpc)
 
         self.chk_sheets = QCheckBox(tr("Show sheets with status"))
@@ -102,11 +121,18 @@ class AhnDock(QDockWidget):
 
         self.btn_load = QPushButton(tr("Load point cloud for map extent"))
         self.btn_load.setDefault(True)
-        self.btn_apply = QPushButton(tr("Apply filter and style to loaded layers"))
+        self.btn_apply = QPushButton(
+            tr("Apply filter and style to loaded layers")
+        )
         self.btn_remove = QPushButton(tr("Remove AHN layers"))
         self.btn_cancel = QPushButton(tr("Cancel"))
         self.btn_cancel.setVisible(False)
-        for b in (self.btn_load, self.btn_cancel, self.btn_apply, self.btn_remove):
+        for b in (
+            self.btn_load,
+            self.btn_cancel,
+            self.btn_apply,
+            self.btn_remove,
+        ):
             lay.addWidget(b)
 
         self.progress = QProgressBar()
@@ -117,9 +143,13 @@ class AhnDock(QDockWidget):
         lay.addWidget(self.lbl_status)
 
         lay.addStretch(1)
-        footer = QLabel(tr(
-            'Source: <a href="https://www.ahn.nl/dataroom">AHN</a>. AHN2-4: CC0, AHN5-6: CC BY 4.0 '
-            "(attribution required). Data is streamed as COPC; nothing is downloaded."))
+        footer = QLabel(
+            tr(
+                'Source: <a href="https://www.ahn.nl/dataroom">AHN</a>.'
+                " AHN2-4: CC0, AHN5-6: CC BY 4.0 (attribution required). Data"
+                " is streamed as COPC; nothing is downloaded."
+            )
+        )
         footer.setWordWrap(True)
         footer.setOpenExternalLinks(True)
         footer.setStyleSheet("color: gray; font-size: 8pt;")
@@ -130,7 +160,9 @@ class AhnDock(QDockWidget):
         self.btn_apply.clicked.connect(self.apply_to_loaded)
         self.btn_remove.clicked.connect(self.remove_layers)
         self.btn_cancel.clicked.connect(self.cancel)
-        self.cb_render.currentIndexChanged.connect(lambda _i: self._render_changed(self._render_key()))
+        self.cb_render.currentIndexChanged.connect(
+            lambda _i: self._render_changed(self._render_key())
+        )
 
     def _render_key(self):
         return self.cb_render.currentData()
@@ -154,7 +186,7 @@ class AhnDock(QDockWidget):
             s.setValue(key + "/max", self.sp_zmax.value())
 
     def _render_changed(self, mode):
-        """Show the range of the chosen renderer (height or intensity) in the spinboxes."""
+        """Show the range of the chosen renderer in the spinboxes."""
         self._store_range()
         on = mode in loader.RANGED
         for wdg in (self.sp_zmin, self.sp_zmax, self.lbl_z):
@@ -169,23 +201,39 @@ class AhnDock(QDockWidget):
             sp.setSuffix(unit)
         self.sp_zmin.setValue(float(s.value(key + "/min", dmin)))
         self.sp_zmax.setValue(float(s.value(key + "/max", dmax)))
-        self.lbl_z.setText(tr("Height range") if attribute == "Z" else tr("Intensity range"))
+        self.lbl_z.setText(
+            tr("Height range") if attribute == "Z" else tr("Intensity range")
+        )
         self._range_mode = mode
 
     def _range(self):
-        """(min, max) for the current renderer, or (None, None) if it has no range."""
+        """(min, max) of the current renderer, or (None, None) if none."""
         if self._render_key() in loader.RANGED:
             return self.sp_zmin.value(), self.sp_zmax.value()
         return None, None
 
     def _restore(self):
         s = QgsSettings()
-        self._select(self.cb_version, s.value(SETTINGS + "version", ahn_tiles.NEWEST), ahn_tiles.NEWEST)
-        self._select(self.cb_classes, s.value(SETTINGS + "classes", "all"), "all")
-        self._select(self.cb_render, s.value(SETTINGS + "render", loader.RENDER_CLASSES), loader.RENDER_CLASSES)
+        self._select(
+            self.cb_version,
+            s.value(SETTINGS + "version", ahn_tiles.NEWEST),
+            ahn_tiles.NEWEST,
+        )
+        self._select(
+            self.cb_classes, s.value(SETTINGS + "classes", "all"), "all"
+        )
+        self._select(
+            self.cb_render,
+            s.value(SETTINGS + "render", loader.RENDER_CLASSES),
+            loader.RENDER_CLASSES,
+        )
         self.sp_max.setValue(int(s.value(SETTINGS + "max_tiles", 16)))
-        self.chk_sheets.setChecked(str(s.value(SETTINGS + "sheets", True)).lower() in ("true", "1"))
-        self.chk_vpc.setChecked(str(s.value(SETTINGS + "vpc", False)).lower() in ("true", "1"))
+        self.chk_sheets.setChecked(
+            str(s.value(SETTINGS + "sheets", True)).lower() in ("true", "1")
+        )
+        self.chk_vpc.setChecked(
+            str(s.value(SETTINGS + "vpc", False)).lower() in ("true", "1")
+        )
         self._render_changed(self._render_key())
 
     def _save(self):
@@ -205,11 +253,15 @@ class AhnDock(QDockWidget):
         self.progress.setValue(0)
 
     def _msg(self, text, level="Info", duration=6):
-        self.iface.messageBar().pushMessage("AHN Streamer", text, _level(level), duration)
+        self.iface.messageBar().pushMessage(
+            "AHN Streamer", text, _level(level), duration
+        )
 
     # ------------------------------------------------------------ actions
     def _subset(self):
-        _label, classes = ahn_tiles.CLASS_FILTERS.get(self.cb_classes.currentData(), ("", None))
+        _label, classes = ahn_tiles.CLASS_FILTERS.get(
+            self.cb_classes.currentData(), ("", None)
+        )
         return ahn_tiles.class_filter_expression(classes)
 
     def _canvas_extent_rd(self):
@@ -226,24 +278,46 @@ class AhnDock(QDockWidget):
             return
         self._save()
         e = self._canvas_extent_rd()
-        n = ahn_tiles.count_cells(e.xMinimum(), e.yMinimum(), e.xMaximum(), e.yMaximum())
+        n = ahn_tiles.count_cells(
+            e.xMinimum(), e.yMinimum(), e.xMaximum(), e.yMaximum()
+        )
         max_tiles = self.sp_max.value()
         if n > max_tiles:
-            self._msg(tr("The map extent covers about %d sheets of 1 km; the maximum is %d. "
-                         "Zoom in or raise the maximum.", n, max_tiles), "Warning")
+            self._msg(
+                tr(
+                    "The map extent covers about %d sheets of 1 km; the"
+                    " maximum is %d. Zoom in or raise the maximum.",
+                    n,
+                    max_tiles,
+                ),
+                "Warning",
+            )
             return
-        cells = ahn_tiles.cells_for_extent(e.xMinimum(), e.yMinimum(), e.xMaximum(), e.yMaximum())
+        cells = ahn_tiles.cells_for_extent(
+            e.xMinimum(), e.yMinimum(), e.xMaximum(), e.yMaximum()
+        )
         if not cells:
-            self._msg(tr("The map extent is outside the Netherlands."), "Warning")
+            self._msg(
+                tr("The map extent is outside the Netherlands."), "Warning"
+            )
             return
 
         version = self.cb_version.currentData()
-        self.lbl_status.setText(tr("Checking availability of %d sheets...", len(cells)))
+        self.lbl_status.setText(
+            tr("Checking availability of %d sheets...", len(cells))
+        )
         self._busy(True)
-        self.task = AvailabilityTask(cells, version, self.cache, on_done=self._task_done,
-                                     need_header=self.chk_vpc.isChecked())
+        self.task = AvailabilityTask(
+            cells,
+            version,
+            self.cache,
+            on_done=self._task_done,
+            need_header=self.chk_vpc.isChecked(),
+        )
         self.task.as_vpc = self.chk_vpc.isChecked()
-        self.task.progressChanged.connect(lambda p: self.progress.setValue(int(p)))
+        self.task.progressChanged.connect(
+            lambda p: self.progress.setValue(int(p))
+        )
         QgsApplication.taskManager().addTask(self.task)
 
     def cancel(self):
@@ -256,7 +330,11 @@ class AhnDock(QDockWidget):
         if not ok:
             if task.exception is not None:
                 self.lbl_status.setText(tr("Error: %s", task.exception))
-                self._msg(tr("Error while checking: %s", task.exception), "Critical", 10)
+                self._msg(
+                    tr("Error while checking: %s", task.exception),
+                    "Critical",
+                    10,
+                )
             else:
                 self.lbl_status.setText(tr("Cancelled."))
             return
@@ -268,7 +346,9 @@ class AhnDock(QDockWidget):
 
         layers, failed, skipped = [], 0, 0
         if task.as_vpc:
-            layers, failed, skipped = self._load_as_vpc(task, mode, subset, zmin, zmax)
+            layers, failed, skipped = self._load_as_vpc(
+                task, mode, subset, zmin, zmax
+            )
         else:
             for tile in sorted(task.result, key=lambda t: (-t["y"], t["x"])):
                 if tile["url"] in already:
@@ -282,20 +362,32 @@ class AhnDock(QDockWidget):
             if layers:
                 loader.add_layers(layers)
         if self.chk_sheets.isChecked():
-            loader.replace_sheets_layer(loader.sheets_layer(task.result, task.missing, task.errors))
+            loader.replace_sheets_layer(
+                loader.sheets_layer(task.result, task.missing, task.errors)
+            )
 
         size = sum(t["size"] for t in task.result) / 1e9
-        shown = tr("Newest available") if task.version == ahn_tiles.NEWEST else task.version
+        shown = (
+            tr("Newest available")
+            if task.version == ahn_tiles.NEWEST
+            else task.version
+        )
         parts = [tr("%d sheets loaded", len(layers))]
         if skipped:
             parts.append(tr("%d already present", skipped))
         if task.missing:
-            parts.append(tr("%d not available in %s", len(task.missing), shown))
+            parts.append(
+                tr("%d not available in %s", len(task.missing), shown)
+            )
         if task.errors:
             parts.append(tr("%d network errors", len(task.errors)))
         if failed:
             parts.append(tr("%d could not be opened", failed))
-        text = ", ".join(parts) + tr(". (%.1f GB in total on the server; only the visible part is streamed.)", size)
+        text = ", ".join(parts) + tr(
+            ". (%.1f GB in total on the server; only the visible part is"
+            " streamed.)",
+            size,
+        )
         self.lbl_status.setText(text)
         level = "Warning" if (task.errors or failed) else "Success"
         self._msg(text, level)
@@ -303,12 +395,17 @@ class AhnDock(QDockWidget):
     def _load_as_vpc(self, task, mode, subset, zmin, zmax):
         """Merge the tiles into one VPC layer per version choice.
 
-        Returns (list of tiles newly added, failed count, already-present count)
+        Returns (tiles newly added, failed count, already-present count)
         so the status message can be shared with the per-tile mode.
         """
-        label = task.version  # language-independent key: "AHN6", ..., or "newest"
+        label = (
+            task.version
+        )  # language-independent key: "AHN6", ..., or "newest"
         old = loader.find_vpc_layer(label)
-        tiles = {t["url"]: t for t in (loader.vpc_tiles_of(old) if old is not None else [])}
+        tiles = {
+            t["url"]: t
+            for t in (loader.vpc_tiles_of(old) if old is not None else [])
+        }
         new = [t for t in task.result if t["url"] not in tiles]
         skipped = len(task.result) - len(new)
         if not new:
@@ -335,7 +432,9 @@ class AhnDock(QDockWidget):
                 layer.setSubsetString(subset)
                 loader.apply_renderer(layer, mode, *self._range())
                 count += 1
-        self.lbl_status.setText(tr("Filter and style applied to %d layers.", count))
+        self.lbl_status.setText(
+            tr("Filter and style applied to %d layers.", count)
+        )
 
     def remove_layers(self):
         canvas = self.iface.mapCanvas()

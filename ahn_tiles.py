@@ -1,7 +1,8 @@
 """Pure-Python logic for the AHN COPC tiles (no QGIS imports, unit-testable).
 
 URL patterns are taken from the official AHN 'bladwijzer'
-(https://basisdata.nl/hwh-ahn/AUX/bladwijzer/index.html), verified October 2026:
+(https://basisdata.nl/hwh-ahn/AUX/bladwijzer/index.html),
+verified October 2026:
 
 * AHN2-AHN5, re-derived 1x1 km sheets (zero-padded coordinates):
     {base}/AHN{n}_KM/01_LAZ/AHN{n}_C_{xxxxxx}_{yyyyyy}.COPC.LAZ
@@ -16,7 +17,7 @@ import math
 BASE_URL = "https://fsn1.your-objectstorage.com/hwh-ahn"
 CELL = 1000
 
-# Rough RD bounding box of the Netherlands (European part), used to clamp extents.
+# Rough RD bounding box of the European Netherlands, used to clamp extents.
 NL_XMIN, NL_YMIN, NL_XMAX, NL_YMAX = 0, 300000, 300000, 625000
 
 AHN6_YEARS = (2025, 2026, 2027)
@@ -44,7 +45,7 @@ CLASSES = {
     26: ("Civil structure", "#8e24aa"),
 }
 
-# Presets for the class filter: key -> (English label, list of classes or None = all).
+# Class filter presets: key -> (English label, classes or None = all).
 CLASS_FILTERS = {
     "all": ("All points", None),
     "ground": ("Ground only (2)", [2]),
@@ -63,7 +64,7 @@ def tile_name(x, y, pad=True):
 
 
 def cells_for_extent(xmin, ymin, xmax, ymax, clamp=True):
-    """Lower-left corners of all 1 km cells intersecting the extent (RD metres).
+    """Lower-left corners of the 1 km cells intersecting the extent (RD m).
 
     An extent edge lying exactly on a cell boundary does not pull in the
     neighbouring cell.
@@ -89,7 +90,7 @@ def cells_for_extent(xmin, ymin, xmax, ymax, clamp=True):
 
 
 def count_cells(xmin, ymin, xmax, ymax):
-    """Number of cells without building the list (cheap guard for huge extents)."""
+    """Number of cells, without building the list (guard for huge extents)."""
     cells_x = math.ceil(max(xmax, xmin + 1) / CELL) - math.floor(xmin / CELL)
     cells_y = math.ceil(max(ymax, ymin + 1) / CELL) - math.floor(ymin / CELL)
     return int(cells_x * cells_y)
@@ -111,12 +112,21 @@ def candidate_urls(version, x, y, base=BASE_URL):
     if version == "AHN6":
         name = tile_name(x, y, pad=False)
         return [
-            ("AHN6", "%s/AHN6/01_LAZ/AHN6_%d_C_%s.COPC.LAZ" % (base, year, name))
+            (
+                "AHN6",
+                "%s/AHN6/01_LAZ/AHN6_%d_C_%s.COPC.LAZ" % (base, year, name),
+            )
             for year in AHN6_YEARS
         ]
     if version in ("AHN2", "AHN3", "AHN4", "AHN5"):
         name = tile_name(x, y, pad=True)
-        return [(version, "%s/%s_KM/01_LAZ/%s_C_%s.COPC.LAZ" % (base, version, version, name))]
+        return [
+            (
+                version,
+                "%s/%s_KM/01_LAZ/%s_C_%s.COPC.LAZ"
+                % (base, version, version, name),
+            )
+        ]
     raise ValueError("Onbekende AHN-versie: %s" % version)
 
 

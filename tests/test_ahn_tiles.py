@@ -15,10 +15,16 @@ class TestTiles(unittest.TestCase):
 
     def test_cells_exact_boundary(self):
         # extent exactly covering one cell must return just that cell
-        self.assertEqual(t.cells_for_extent(155000, 463000, 156000, 464000), [(155000, 463000)])
+        self.assertEqual(
+            t.cells_for_extent(155000, 463000, 156000, 464000),
+            [(155000, 463000)],
+        )
 
     def test_cells_point_extent(self):
-        self.assertEqual(t.cells_for_extent(155500, 463500, 155500, 463500), [(155000, 463000)])
+        self.assertEqual(
+            t.cells_for_extent(155500, 463500, 155500, 463500),
+            [(155000, 463000)],
+        )
 
     def test_cells_outside_nl(self):
         self.assertEqual(t.cells_for_extent(-50000, 0, -1000, 100), [])
@@ -37,22 +43,33 @@ class TestTiles(unittest.TestCase):
     def test_urls_ahn6_unpadded_years(self):
         urls = [u for _, u in t.candidate_urls("AHN6", 98000, 477000)]
         # verified to exist (HTTP 200)
-        self.assertIn(FSN + "/AHN6/01_LAZ/AHN6_2026_C_98000_477000.COPC.LAZ", urls)
-        self.assertIn(FSN + "/AHN6/01_LAZ/AHN6_2025_C_98000_477000.COPC.LAZ", urls)
+        self.assertIn(
+            FSN + "/AHN6/01_LAZ/AHN6_2026_C_98000_477000.COPC.LAZ", urls
+        )
+        self.assertIn(
+            FSN + "/AHN6/01_LAZ/AHN6_2025_C_98000_477000.COPC.LAZ", urls
+        )
 
     def test_newest_combines(self):
         vs = [v for v, _ in t.candidate_urls(t.NEWEST, 155000, 463000)]
         self.assertEqual(vs, ["AHN6"] * len(t.AHN6_YEARS) + ["AHN5"])
 
     def test_pick_best_newest_prefers_ahn6(self):
-        a = [("AHN5", "x/AHN5"), ("AHN6", "x/AHN6_2025"), ("AHN6", "x/AHN6_2026")]
+        a = [
+            ("AHN5", "x/AHN5"),
+            ("AHN6", "x/AHN6_2025"),
+            ("AHN6", "x/AHN6_2026"),
+        ]
         self.assertEqual(t.pick_best(t.NEWEST, a), ("AHN6", "x/AHN6_2026"))
         self.assertEqual(t.pick_best(t.NEWEST, a[:1]), ("AHN5", "x/AHN5"))
         self.assertIsNone(t.pick_best("AHN4", []))
 
     def test_filter_expression(self):
         self.assertEqual(t.class_filter_expression(None), "")
-        self.assertEqual(t.class_filter_expression([2, 9]), "Classification = 2 OR Classification = 9")
+        self.assertEqual(
+            t.class_filter_expression([2, 9]),
+            "Classification = 2 OR Classification = 9",
+        )
 
     def test_bad_version(self):
         with self.assertRaises(ValueError):

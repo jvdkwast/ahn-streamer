@@ -22,7 +22,9 @@ class AhnStreamerPlugin:
         icon = QIcon(os.path.join(os.path.dirname(__file__), "icon.svg"))
         self.action = QAction(icon, "AHN Streamer", self.iface.mainWindow())
         self.action.setCheckable(True)
-        self.action.setToolTip(tr("Stream AHN point clouds for the map extent"))
+        self.action.setToolTip(
+            tr("Stream AHN point clouds for the map extent")
+        )
         self.action.toggled.connect(self._toggle)
         self.iface.addWebToolBarIcon(self.action)
         self.iface.addPluginToWebMenu("AHN Streamer", self.action)
@@ -30,7 +32,9 @@ class AhnStreamerPlugin:
     def _toggle(self, on):
         if self.dock is None:
             self.dock = AhnDock(self.iface, self.iface.mainWindow())
-            self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
+            self.iface.addDockWidget(
+                Qt.DockWidgetArea.RightDockWidgetArea, self.dock
+            )
             self.dock.visibilityChanged.connect(self.action.setChecked)
         self.dock.setVisible(on)
 

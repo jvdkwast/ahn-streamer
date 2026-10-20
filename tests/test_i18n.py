@@ -1,4 +1,5 @@
-"""Every tr() string in the plugin must have a Dutch translation, and vice versa."""
+"""Every tr() string must have a Dutch translation, and vice versa."""
+
 import ast
 import glob
 import os
@@ -12,21 +13,30 @@ import i18n  # noqa: E402
 
 
 def tr_strings():
-    """All string literals passed to tr(), plus labels translated indirectly."""
+    """String literals passed to tr(), plus labels translated indirectly."""
     found = set()
     for path in glob.glob(os.path.join(ROOT, "*.py")):
         with open(path, encoding="utf-8") as fh:
             tree = ast.parse(fh.read())
         for node in ast.walk(tree):
-            if (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "tr"
-                    and node.args and isinstance(node.args[0], ast.Constant)
-                    and isinstance(node.args[0].value, str)):
+            if (
+                isinstance(node, ast.Call)
+                and getattr(node.func, "id", None) == "tr"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
+            ):
                 found.add(node.args[0].value)
     # labels from data tables that are passed to tr() as variables
     found.update(label for label, _ in ahn_tiles.CLASS_FILTERS.values())
     found.update(label for label, _ in ahn_tiles.CLASSES.values())
-    renderers = ["Classification (AHN colours)", "Height above NAP", "Intensity",
-                 "Number of returns (vegetation/edges)", "QGIS default (RGB if present)"]
+    renderers = [
+        "Classification (AHN colours)",
+        "Height above NAP",
+        "Intensity",
+        "Number of returns (vegetation/edges)",
+        "QGIS default (RGB if present)",
+    ]
     found.update(renderers)
     return found
 
