@@ -15,7 +15,7 @@ changelog=
     0.1.3 - 3D renderer set to "Follow 2D symbology"; QGIS 4 fix
     0.1.0 - First prototype
 author=Hans van der Kwast
-email=hansakwast23@gmail.com
+email=hans@qwast-gis.com
 tags=ahn,lidar,point cloud,copc,vpc,elevation,netherlands,streaming,3d
 category=Web
 experimental=True
