@@ -32,6 +32,40 @@ setting (*Settings → Options → General → User interface translation*): Dut
 `nl`, English for any other language. Translations live in `i18n.py`; adding a
 language means adding a dictionary there.
 
+## Processing Toolbox
+
+AHN Streamer also adds its own provider to the Processing Toolbox (*AHN
+Streamer*), so you can use it in graphical models, batch processing and
+scripts:
+
+| Algorithm | ID | Output |
+|---|---|---|
+| Create AHN virtual point cloud (VPC) for extent | `ahnstreamer:createvpc` | A `.vpc` that refers to the remote COPC sheets |
+| AHN sheets for extent | `ahnstreamer:sheets` | Polygons of the 1×1 km sheets with status, version, size and COPC URL |
+
+Both take an extent (e.g. from a layer of your study area), a version (`0` =
+newest available, `1` = AHN6, `2` = AHN5, …, `5` = AHN2) and a maximum number of
+sheets. The VPC can be chained into other point cloud algorithms, for example
+to clip it to your study area or to create a DTM:
+
+```python
+import processing
+
+vpc = processing.run("ahnstreamer:createvpc", {
+    "EXTENT": "155000,157000,463000,465000 [EPSG:28992]",
+    "VERSION": 0,
+    "MAX_SHEETS": 100,
+    "OUTPUT": "TEMPORARY_OUTPUT",
+})["OUTPUT"]
+
+processing.run("pdal:exportrastertin", {
+    "INPUT": vpc,
+    "RESOLUTION": 0.5,
+    "FILTER_EXPRESSION": "Classification = 2",
+    "OUTPUT": "/path/to/dtm.tif",
+})
+```
+
 ## Data source
 
 The plugin uses the URL scheme of the official AHN sheet index

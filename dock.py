@@ -9,6 +9,7 @@ from qgis.core import (
     QgsProject,
     QgsSettings,
 )
+from qgis.PyQt.QtCore import QCoreApplication
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -30,6 +31,10 @@ from .availability import AvailabilityCache, AvailabilityTask
 
 SETTINGS = "ahn_copc/"
 RD = QgsCoordinateReferenceSystem("EPSG:28992")
+
+# Share of the progress bar used by the availability check (rest: opening)
+CHECK_SHARE_TILES = 0.3
+CHECK_SHARE_VPC = 0.95
 
 
 def _level(name):
@@ -248,9 +253,17 @@ class AhnDock(QDockWidget):
 
     def _busy(self, busy):
         self.btn_load.setEnabled(not busy)
+        self.btn_apply.setEnabled(not busy)
+        self.btn_remove.setEnabled(not busy)
         self.btn_cancel.setVisible(busy)
         self.progress.setVisible(busy)
         self.progress.setValue(0)
+        self._cancel_open = False
+
+    def _show_progress(self, pct, text):
+        """Overall progress (0-100) with a label of the current phase."""
+        self.progress.setFormat("%s  %%p%%" % text.replace("%", "%%"))
+        self.progress.setValue(int(round(pct)))
 
     def _msg(self, text, level="Info", duration=6):
         self.iface.messageBar().pushMessage(
@@ -315,19 +328,26 @@ class AhnDock(QDockWidget):
             need_header=self.chk_vpc.isChecked(),
         )
         self.task.as_vpc = self.chk_vpc.isChecked()
+        # Share of the bar for the availability check; the rest is opening
+        # the layers. Opening one remote COPC per sheet is the slow part; a
+        # VPC opens instantly but needs the headers read during the check.
+        share = CHECK_SHARE_VPC if self.task.as_vpc else CHECK_SHARE_TILES
+        label = tr("Checking availability")
+        self._show_progress(0, label)
         self.task.progressChanged.connect(
-            lambda p: self.progress.setValue(int(p))
+            lambda p: self._show_progress(p * share, label)
         )
         QgsApplication.taskManager().addTask(self.task)
 
     def cancel(self):
         if self.task is not None:
             self.task.cancel()
+        self._cancel_open = True  # also stops opening layers
 
     def _task_done(self, task, ok):
         self.task = None
-        self._busy(False)
         if not ok:
+            self._busy(False)
             if task.exception is not None:
                 self.lbl_status.setText(tr("Error: %s", task.exception))
                 self._msg(
@@ -350,10 +370,23 @@ class AhnDock(QDockWidget):
                 task, mode, subset, zmin, zmax
             )
         else:
+            todo = []
             for tile in sorted(task.result, key=lambda t: (-t["y"], t["x"])):
                 if tile["url"] in already:
                     skipped += 1
-                    continue
+                else:
+                    todo.append(tile)
+            share = CHECK_SHARE_TILES * 100
+            for i, tile in enumerate(todo):
+                if self._cancel_open:
+                    break
+                # Opening a remote COPC blocks while QGIS reads its header and
+                # index, so update the bar before each sheet and let it paint.
+                self._show_progress(
+                    share + (100 - share) * i / len(todo),
+                    tr("Opening sheet %d of %d", i + 1, len(todo)),
+                )
+                QCoreApplication.processEvents()
                 layer = loader.make_layer(tile, mode, subset, zmin, zmax)
                 if layer is None:
                     failed += 1
@@ -361,6 +394,7 @@ class AhnDock(QDockWidget):
                     layers.append(layer)
             if layers:
                 loader.add_layers(layers)
+        self._busy(False)
         if self.chk_sheets.isChecked():
             loader.replace_sheets_layer(
                 loader.sheets_layer(task.result, task.missing, task.errors)
@@ -398,9 +432,8 @@ class AhnDock(QDockWidget):
         Returns (tiles newly added, failed count, already-present count)
         so the status message can be shared with the per-tile mode.
         """
-        label = (
-            task.version
-        )  # language-independent key: "AHN6", ..., or "newest"
+        # language-independent key: "AHN6", ..., or "newest"
+        label = task.version
         old = loader.find_vpc_layer(label)
         tiles = {
             t["url"]: t
@@ -413,6 +446,10 @@ class AhnDock(QDockWidget):
         for t in new:
             tiles[t["url"]] = t
         ordered = sorted(tiles.values(), key=lambda t: (-t["y"], t["x"]))
+        self._show_progress(
+            CHECK_SHARE_VPC * 100, tr("Writing virtual point cloud")
+        )
+        QCoreApplication.processEvents()
         layer = loader.make_vpc_layer(ordered, label, mode, subset, zmin, zmax)
         if layer is None:
             return [], len(new), skipped

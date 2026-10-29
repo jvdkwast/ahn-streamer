@@ -186,6 +186,28 @@ class TestAvailability(unittest.TestCase):
         self.assertEqual(len(hdr_calls), 1)
         self.assertEqual(t.result[0]["hdr"]["bbox"][5], 30)
 
+    def test_progress_continuous(self):
+        """One run 0-100 %, never going back, over checks and headers."""
+        availability.read_header = lambda url: {
+            "count": 1,
+            "bbox": [0, 0, 0, 1, 1, 1],
+            "pdrf": 6,
+        }
+        seen = []
+        cells = [(98000, 477000), (99000, 477000), (101000, 477000)]
+        result, _m, _e = availability.resolve(
+            cells,
+            ahn_tiles.NEWEST,
+            self.cache,
+            workers=1,
+            need_header=True,
+            progress=seen.append,
+        )
+        self.assertEqual(len(result), 2)
+        self.assertEqual(seen, sorted(seen), "progress went backwards")
+        self.assertEqual(seen[-1], 100.0)
+        self.assertGreater(len(set(seen)), 5)
+
     def test_network_errors_not_cached(self):
         self.run_task([(100000, 477000)], "AHN5")
         self.assertIsNone(self.cache.get(next(iter(NETFAIL))))

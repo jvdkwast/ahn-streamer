@@ -161,12 +161,131 @@ def read_header(url):
         return None
 
 
-class AvailabilityTask(QgsTask):
-    """Resolve, for each cell, which COPC URL exists.
+class Cancelled(Exception):
+    """Raised by resolve() when the caller cancels."""
 
-    result: list of dicts {x, y, version, url, size} for available cells and
-    `missing` / `errors` lists of (x, y) for the rest.
+
+def resolve(
+    cells,
+    version,
+    cache,
+    base_url=ahn_tiles.BASE_URL,
+    workers=8,
+    need_header=False,
+    is_canceled=lambda: False,
+    progress=lambda pct: None,
+    describe=lambda text: None,
+):
+    """Find, for each 1 km cell, which COPC file exists.
+
+    Shared by the panel (AvailabilityTask) and the Processing algorithms.
+    Returns (result, missing, errors): result = dicts {x, y, version, url,
+    size[, hdr]} for available cells; missing / errors = lists of (x, y).
+    Raises Cancelled when is_canceled() becomes true.
     """
+    per_cell = {}
+    todo = []
+    for x, y in cells:
+        per_cell[(x, y)] = {"available": [], "unknown": False, "sizes": {}}
+        for ver, url in ahn_tiles.candidate_urls(version, x, y, base_url):
+            known = cache.get(url)
+            if known is None:
+                todo.append((x, y, ver, url))
+            elif known["ok"]:
+                per_cell[(x, y)]["available"].append((ver, url))
+                per_cell[(x, y)]["sizes"][url] = known.get("size", 0)
+
+    # One continuous 0-100 % over both phases (existence checks, then
+    # headers), weighted by the number of requests. Before the checks the
+    # number of headers to read is unknown; the cell count is the upper bound.
+    headers_est = len(cells) if need_header else 0
+    total_est = len(todo) + headers_est
+    split = len(todo) / total_est if total_est else 1.0
+    describe(tr("Checking availability of %d sheets...", len(cells)))
+    done = 0
+    if todo:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futures = {
+                ex.submit(head, url): (x, y, ver, url)
+                for (x, y, ver, url) in todo
+            }
+            for fut in as_completed(futures):
+                if is_canceled():
+                    for f in futures:
+                        f.cancel()
+                    raise Cancelled()
+                x, y, ver, url = futures[fut]
+                exists, size = fut.result()
+                if exists is None:
+                    per_cell[(x, y)]["unknown"] = True
+                else:
+                    cache.put(url, exists, size)
+                    if exists:
+                        per_cell[(x, y)]["available"].append((ver, url))
+                        per_cell[(x, y)]["sizes"][url] = size
+                done += 1
+                progress(100.0 * split * done / len(todo))
+    progress(100.0 * split)
+
+    result, missing, errors = [], [], []
+    for (x, y), info in per_cell.items():
+        best = ahn_tiles.pick_best(version, info["available"])
+        if best:
+            ver, url = best
+            size = info["sizes"].get(url, 0)
+            result.append(
+                {"x": x, "y": y, "version": ver, "url": url, "size": size}
+            )
+        elif info["unknown"]:
+            errors.append((x, y))
+        else:
+            missing.append((x, y))
+
+    if need_header:
+        _fetch_headers(
+            result, cache, workers, is_canceled, progress, describe, split
+        )
+    progress(100.0)
+    cache.save()
+    return result, missing, errors
+
+
+def _fetch_headers(
+    result, cache, workers, is_canceled, progress, describe, start=0.0
+):
+    """Add 'hdr' (count, bbox, pdrf) to each result tile; needed for a VPC.
+
+    Progress continues from `start` (fraction 0-1) up to 100 %.
+    """
+    todo = []
+    for tile in result:
+        hdr = cache.get_header(tile["url"])
+        if hdr:
+            tile["hdr"] = hdr
+        else:
+            todo.append(tile)
+    if not todo:
+        return
+    describe(tr("AHN Streamer: reading headers for VPC"))
+    done = 0
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = {ex.submit(read_header, t["url"]): t for t in todo}
+        for fut in as_completed(futures):
+            if is_canceled():
+                for f in futures:
+                    f.cancel()
+                raise Cancelled()
+            tile = futures[fut]
+            hdr = fut.result()
+            if hdr:
+                tile["hdr"] = hdr
+                cache.put_header(tile["url"], hdr)
+            done += 1
+            progress(100.0 * (start + (1.0 - start) * done / len(todo)))
+
+
+class AvailabilityTask(QgsTask):
+    """Background task for the panel; see resolve() for the result."""
 
     def __init__(
         self,
@@ -196,107 +315,27 @@ class AvailabilityTask(QgsTask):
 
     def run(self):
         try:
-            per_cell = {}
-            todo = []
-            for x, y in self.cells:
-                per_cell[(x, y)] = {
-                    "available": [],
-                    "unknown": False,
-                    "sizes": {},
-                }
-                for ver, url in ahn_tiles.candidate_urls(
-                    self.version, x, y, self.base_url
-                ):
-                    known = self.cache.get(url)
-                    if known is None:
-                        todo.append((x, y, ver, url))
-                    elif known["ok"]:
-                        per_cell[(x, y)]["available"].append((ver, url))
-                        per_cell[(x, y)]["sizes"][url] = known.get("size", 0)
-
-            total = max(len(todo), 1)
-            done = 0
-            if todo:
-                with ThreadPoolExecutor(max_workers=self.workers) as ex:
-                    futures = {
-                        ex.submit(head, url): (x, y, ver, url)
-                        for (x, y, ver, url) in todo
-                    }
-                    for fut in as_completed(futures):
-                        if self.isCanceled():
-                            for f in futures:
-                                f.cancel()
-                            return False
-                        x, y, ver, url = futures[fut]
-                        exists, size = fut.result()
-                        if exists is None:
-                            per_cell[(x, y)]["unknown"] = True
-                        else:
-                            self.cache.put(url, exists, size)
-                            if exists:
-                                per_cell[(x, y)]["available"].append(
-                                    (ver, url)
-                                )
-                                per_cell[(x, y)]["sizes"][url] = size
-                        done += 1
-                        self.setProgress(100.0 * done / total)
-
-            for (x, y), info in per_cell.items():
-                best = ahn_tiles.pick_best(self.version, info["available"])
-                if best:
-                    ver, url = best
-                    self.result.append(
-                        {
-                            "x": x,
-                            "y": y,
-                            "version": ver,
-                            "url": url,
-                            "size": info["sizes"].get(url, 0),
-                        }
-                    )
-                elif info["unknown"]:
-                    self.errors.append((x, y))
-                else:
-                    self.missing.append((x, y))
-
-            if self.need_header:
-                if not self._fetch_headers():
-                    return False
-            self.cache.save()
+            self.result, self.missing, self.errors = resolve(
+                self.cells,
+                self.version,
+                self.cache,
+                self.base_url,
+                self.workers,
+                self.need_header,
+                is_canceled=self.isCanceled,
+                progress=self.setProgress,
+                describe=self._describe,
+            )
             return True
+        except Cancelled:
+            return False
         except Exception as e:  # report in finished(), never crash QGIS
             self.exception = e
             return False
 
-    def _fetch_headers(self):
-        """Add 'hdr' (count, bbox) to each result tile; needed for a VPC."""
-        todo = []
-        for tile in self.result:
-            hdr = self.cache.get_header(tile["url"])
-            if hdr:
-                tile["hdr"] = hdr
-            else:
-                todo.append(tile)
-        if not todo:
-            return True
+    def _describe(self, text):
         if hasattr(self, "setDescription"):
-            self.setDescription(tr("AHN Streamer: reading headers for VPC"))
-        done = 0
-        with ThreadPoolExecutor(max_workers=self.workers) as ex:
-            futures = {ex.submit(read_header, t["url"]): t for t in todo}
-            for fut in as_completed(futures):
-                if self.isCanceled():
-                    for f in futures:
-                        f.cancel()
-                    return False
-                tile = futures[fut]
-                hdr = fut.result()
-                if hdr:
-                    tile["hdr"] = hdr
-                    self.cache.put_header(tile["url"], hdr)
-                done += 1
-                self.setProgress(100.0 * done / len(todo))
-        return True
+            self.setDescription(text)
 
     def finished(self, ok):
         if self.on_done:

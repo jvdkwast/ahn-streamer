@@ -47,8 +47,8 @@ NL = {
     "Cancel": "Annuleren",
     (
         'Source: <a href="https://www.ahn.nl/dataroom">AHN</a>. AHN2-4: CC0, '
-        'AHN5-6: CC BY 4.0 (attribution required). Data is streamed as COPC; '
-        'nothing is downloaded.'
+        "AHN5-6: CC BY 4.0 (attribution required). Data is streamed as COPC; "
+        "nothing is downloaded."
     ): (
         'Bron: <a href="https://www.ahn.nl/dataroom">AHN</a>. AHN2-4: CC0,'
         " AHN5-6: CC BY 4.0 (bronvermelding verplicht). Data wordt gestreamd"
@@ -132,6 +132,68 @@ NL = {
     "AHN Streamer: reading headers for VPC": (
         "AHN Streamer: headers lezen voor VPC"
     ),
+    # processing
+    "Checking availability": "Beschikbaarheid controleren",
+    "Opening sheet %d of %d": "Kaartblad %d van %d openen",
+    "Writing virtual point cloud": "Virtuele puntenwolk schrijven",
+    "Extent": "Gebied",
+    "Maximum number of 1x1 km sheets": (
+        "Maximaal aantal kaartbladen van 1x1 km"
+    ),
+    (
+        "The extent covers about %d sheets of 1 km; the maximum "
+        "is %d. Use a smaller extent or raise the maximum."
+    ): (
+        "Het gebied beslaat ca. %d kaartbladen van 1 km; het maximum "
+        "is %d. Kies een kleiner gebied of verhoog het maximum."
+    ),
+    "The extent is outside the Netherlands.": (
+        "Het gebied ligt buiten Nederland."
+    ),
+    "%d sheets not available in this version.": (
+        "%d kaartbladen niet beschikbaar in deze versie."
+    ),
+    "%d sheets could not be checked (network error).": (
+        "%d kaartbladen konden niet gecontroleerd worden (netwerkfout)."
+    ),
+    "Create AHN virtual point cloud (VPC) for extent": (
+        "AHN virtuele puntenwolk (VPC) voor gebied maken"
+    ),
+    (
+        "Writes a virtual point cloud (.vpc) with all AHN COPC sheets "
+        "(1x1 km) that intersect the extent. The VPC refers to the "
+        "remote files on the official AHN storage, so the points are "
+        "streamed, not downloaded. The output can be used as input for "
+        "point cloud algorithms, e.g. to clip it or to create a DTM. "
+        "Source: AHN (www.ahn.nl); AHN5 and AHN6 are CC BY 4.0."
+    ): (
+        "Schrijft een virtuele puntenwolk (.vpc) met alle AHN-COPC-"
+        "kaartbladen (1x1 km) die het gebied overlappen. De VPC verwijst "
+        "naar de bestanden op de officiële AHN-opslag, dus de punten "
+        "worden gestreamd en niet gedownload. De uitvoer kun je gebruiken "
+        "als invoer voor puntenwolkalgoritmen, bijvoorbeeld om te knippen "
+        "of een DTM te maken. Bron: AHN (www.ahn.nl); AHN5 en AHN6 vallen "
+        "onder CC BY 4.0."
+    ),
+    "Virtual point cloud": "Virtuele puntenwolk",
+    "Number of sheets": "Aantal kaartbladen",
+    "No AHN sheets available for this extent and version.": (
+        "Geen AHN-kaartbladen beschikbaar voor dit gebied en deze versie."
+    ),
+    "Virtual point cloud with %d sheets written.": (
+        "Virtuele puntenwolk met %d kaartbladen geschreven."
+    ),
+    "AHN sheets for extent": "AHN-kaartbladen voor gebied",
+    (
+        "Creates a polygon layer with the AHN sheets (1x1 km) that "
+        "intersect the extent, with their status, version, size and "
+        "COPC URL. Use the URLs in your own workflows or models."
+    ): (
+        "Maakt een polygoonlaag met de AHN-kaartbladen (1x1 km) die het "
+        "gebied overlappen, met hun status, versie, grootte en COPC-URL. "
+        "Gebruik de URL's in je eigen workflows of modellen."
+    ),
+    "AHN sheets": "AHN-kaartbladen",
 }
 
 

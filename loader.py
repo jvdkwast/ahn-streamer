@@ -282,18 +282,16 @@ def vpc_tiles_of(layer):
         return []
 
 
-def make_vpc_layer(
-    tiles, label, renderer_mode, subset="", zmin=None, zmax=None
-):
-    """Write a .vpc referencing the remote COPC tiles and open it as one layer.
+def write_tiles_vpc(tiles, path, transform_context):
+    """Write a .vpc at `path` whose items point to the remote COPC tiles.
 
-    label: language-independent key of the version choice ("AHN6", "newest").
-
-    tiles: dicts with x, y, version, url and optionally hdr {count, bbox}.
+    tiles: dicts with x, y, version, url and optionally hdr
+    {count, bbox, pdrf}. Used by the panel and the Processing algorithms.
     """
-    rd = QgsCoordinateReferenceSystem("EPSG:28992")
     xform = QgsCoordinateTransform(
-        rd, QgsCoordinateReferenceSystem("EPSG:4326"), QgsProject.instance()
+        QgsCoordinateReferenceSystem("EPSG:28992"),
+        QgsCoordinateReferenceSystem("EPSG:4326"),
+        transform_context,
     )
 
     def to_wgs84(x, y):
@@ -326,17 +324,25 @@ def make_vpc_layer(
                 "pdrf": pdrf,
             }
         )
+    wkt = _wkt2(QgsCoordinateReferenceSystem("EPSG:7415"))
+    vpc.write_vpc(path, vpc.build_vpc(entries, to_wgs84, wkt))
+    return path
 
+
+def make_vpc_layer(
+    tiles, label, renderer_mode, subset="", zmin=None, zmax=None
+):
+    """Write a .vpc referencing the remote COPC tiles and open it as one layer.
+
+    label: language-independent key of the version choice ("AHN6", "newest").
+
+    tiles: dicts with x, y, version, url and optionally hdr {count, bbox}.
+    """
     path = os.path.join(
         vpc_dir(),
         "%s_%d.vpc" % (label.replace(" ", "_"), int(time.time() * 1000)),
     )
-    vpc.write_vpc(
-        path,
-        vpc.build_vpc(
-            entries, to_wgs84, _wkt2(QgsCoordinateReferenceSystem("EPSG:7415"))
-        ),
-    )
+    write_tiles_vpc(tiles, path, QgsProject.instance().transformContext())
 
     shown = tr("AHN newest") if label == ahn_tiles.NEWEST else label
     name = tr("%s VPC (%d sheets)", shown, len(tiles))
