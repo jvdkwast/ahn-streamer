@@ -6,8 +6,9 @@ supportsQt6=True
 hasProcessingProvider=yes
 description=Stream AHN point clouds (AHN2-AHN6) of the Netherlands as COPC for the current map extent, without downloading.
 about=AHN Streamer loads the point clouds of the Actueel Hoogtebestand Nederland (AHN, the Dutch national elevation dataset) for the current map canvas as Cloud Optimized Point Clouds (COPC), straight from the official AHN storage. QGIS fetches only the level of detail it needs through HTTP range requests, so nothing has to be downloaded or converted. Choose AHN2 to AHN6 or "newest available" per 1 km sheet, filter by class (ground, buildings, water, ...), pick a style (classification, height, intensity, number of returns, RGB for AHN6), and optionally merge all tiles into one virtual point cloud (VPC). Also available in the Processing Toolbox, for models and scripts. Coverage: the European Netherlands only. No external dependencies. Data: AHN (www.ahn.nl); AHN1-4 are CC0, AHN5-6 are CC BY 4.0, so attribution is required. The user interface is available in English and Dutch and follows the QGIS language setting.
-version=0.6.1
+version=1.0.0
 changelog=
+    1.0.0 - First stable release (no longer experimental)
     0.6.1 - One continuous progress bar per action, including opening the sheets; Processing tools directly under AHN Streamer
     0.6.0 - Processing provider: create an AHN virtual point cloud (VPC) or a sheet layer for any extent, for use in models and scripts
     0.5.1 - Errors are logged to the QGIS Message Log instead of being silently ignored (security scan); code formatted to PEP 8 without config overrides
@@ -22,7 +23,7 @@ author=Hans van der Kwast
 email=hans@qwast-gis.com
 tags=ahn,lidar,point cloud,copc,vpc,elevation,netherlands,streaming,3d
 category=Web
-experimental=True
+experimental=False
 deprecated=False
 icon=icon.svg
 homepage=https://github.com/jvdkwast/ahn-streamer
